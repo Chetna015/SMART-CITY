@@ -1,129 +1,101 @@
-import { useState } from "react";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import { Link } from "react-router-dom";
 
 export default function UserDashboard() {
-  // Dummy user profile (later backend se aa jayega)
-  const [user, setUser] = useState({
-    name: "Suyash Prakash",
+  const savedName = localStorage.getItem("citizenName") || "Citizen";
+
+  const user = {
+    name: savedName, // ← THIS SHOWS THE OTP LOGIN NAME
     email: "yashcube07@gmail.com",
-    profilePic: "https://cdn-icons-png.flaticon.com/512/149/149071.png",
-  });
-
-  // Dummy issues reported by user
-  const issues = [
-    {
-      id: 1,
-      title: "Broken Street Light",
-      date: "Dec 10, 2025",
-      status: "Pending",
-      icon: "💡",
-    },
-    {
-      id: 2,
-      title: "Pothole on Road",
-      date: "Dec 8, 2025",
-      status: "Accepted",
-      icon: "🚧",
-    },
-    {
-      id: 3,
-      title: "Garbage Overflow",
-      date: "Dec 5, 2025",
-      status: "Resolved",
-      icon: "🗑️",
-    },
-  ];
-
-  const statusColor = {
-    Pending: "bg-yellow-400 text-white",
-    Accepted: "bg-blue-600 text-white",
-    "In Progress": "bg-purple-600 text-white",
-    Resolved: "bg-green-600 text-white",
+    phone: "+91 9125900756",
+    address: "Varanasi, Uttar Pradesh",
+    image: "https://i.pravatar.cc/150?u=" + savedName,
   };
 
   return (
     <>
       <Navbar />
 
-      <section className="max-w-6xl mx-auto px-6 py-12">
-        {/* Dashboard Heading */}
-        <h1 className="text-4xl font-bold text-center text-green-700">
-          Citizen Dashboard
-        </h1>
-        <p className="text-center text-secondary mb-10">
-          Track your submitted issues and monitor their progress.
-        </p>
+      <div className="max-w-6xl mx-auto px-6 py-10">
+        {/* DASHBOARD HEADER */}
+        {/* DASHBOARD HEADER */}
+        <div className="flex justify-between items-center mb-10">
+          {/* LEFT SIDE — HEADING */}
+          <h1 className="text-4xl font-bold text-green-700">
+            Citizen Dashboard
+          </h1>
 
-        {/* Profile Section */}
-        <div className="bg-white p-6 rounded-2xl shadow-md border border-borderCol max-w-xl mx-auto flex items-center gap-6 mb-12">
-          <img
-            src={user.profilePic}
-            alt="Profile"
-            className="w-20 h-20 rounded-full border"
-          />
-          <div>
-            <h2 className="text-xl font-semibold text-dark">{user.name}</h2>
-            <p className="text-secondary">{user.email}</p>
-
-            <button className="mt-3 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+          {/* RIGHT SIDE — BUTTON GROUP */}
+          <div className="flex items-center gap-4">
+            <button className="px-5 py-3 rounded-lg bg-green-600 text-white hover:bg-green-700">
               Update Profile
             </button>
+
+            <Link
+              to="/report"
+              className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition"
+            >
+              + Report Issue
+            </Link>
           </div>
         </div>
 
-        {/* Add Issue Button */}
-        <div className="text-center mb-10">
-          <Link
-            to="/report"
-            className="px-6 py-3 bg-green-600 text-white rounded-lg shadow-md hover:bg-green-700"
-          >
-            + Report New Issue
-          </Link>
+        {/* PROFILE CARD */}
+        <div className="bg-white border border-gray-200 shadow-sm rounded-2xl p-8 mb-12 flex justify-between items-center">
+          {/* LEFT SIDE — DETAILS */}
+          <div className="flex-1">
+            <h2 className="text-2xl font-bold mb-4">Your Profile</h2>
+
+            <p>
+              <strong>Name:</strong> {user.name}
+            </p>
+            <p>
+              <strong>Email:</strong> {user.email}
+            </p>
+            <p>
+              <strong>Phone:</strong> {user.phone}
+            </p>
+            <p>
+              <strong>Address:</strong> {user.address}
+            </p>
+
+            {/* UPDATE PROFILE BUTTON LEFT SIDE */}
+          </div>
+
+          {/* RIGHT SIDE — PROFILE PIC */}
+          <div className="flex justify-center ml-10">
+            <img
+              src={user.image}
+              alt="Profile"
+              className="w-28 h-28 rounded-full border border-gray-300 object-cover shadow-sm"
+            />
+          </div>
         </div>
 
-        {/* Issues List */}
-        <h2 className="text-2xl font-bold text-dark mb-6">
-          Your Reported Issues
-        </h2>
+        {/* COMMUNITY SECTION */}
+        <h2 className="text-2xl font-bold mb-4">Recent Community Reports</h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {issues.map((issue) => (
-            <div
-              key={issue.id}
-              className="p-6 bg-white rounded-2xl shadow-sm border border-borderCol hover:shadow-md transition"
-            >
-              <div className="flex items-center gap-4">
-                <div className="text-4xl">{issue.icon}</div>
-                <div>
-                  <h3 className="text-xl font-semibold text-dark">
-                    {issue.title}
-                  </h3>
-                  <p className="text-secondary">Date Reported: {issue.date}</p>
-                </div>
+        <div className="space-y-5">
+          {/* Example item */}
+          <div className="bg-white border border-gray-200 shadow-sm rounded-xl p-5 flex justify-between items-center">
+            <div>
+              <div className="flex items-center gap-3 mb-1">
+                <span className="text-3xl">🗑️</span>
+                <h3 className="text-lg font-semibold">
+                  Overflowing garbage bin
+                </h3>
               </div>
-
-              <div className="mt-4 flex justify-between items-center">
-                <Link
-                  to="/track"
-                  className="text-blue-600 font-medium hover:underline"
-                >
-                  View Status →
-                </Link>
-
-                <span
-                  className={`px-4 py-1 rounded-full text-sm font-medium ${
-                    statusColor[issue.status]
-                  }`}
-                >
-                  {issue.status}
-                </span>
-              </div>
+              <p className="text-gray-500 text-sm">MG Road & Brigade Road</p>
+              <p className="text-gray-500 text-sm">Reported: 15/01/2024</p>
             </div>
-          ))}
+
+            <span className="px-4 py-1 rounded-full bg-yellow-400 text-white text-sm font-medium">
+              pending
+            </span>
+          </div>
         </div>
-      </section>
+      </div>
 
       <Footer />
     </>

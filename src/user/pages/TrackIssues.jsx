@@ -1,29 +1,46 @@
-import Navbar from "../../components/Navbar";
+import IssueTrackRow from "../components/IssueTrackRow";
 
 export default function TrackIssues() {
+  const issues = [
+    {
+      id: 1,
+      title: "Overflowing garbage bin",
+      description: "Garbage has been overflowing for 3 days.",
+      location: "MG Road & Brigade Road",
+      date: "15/01/2024",
+      category: "garbage",
+      status: "pending", // backend style
+      image: "/images/garbage.jpg",
+    },
+    {
+      id: 2,
+      title: "Large pothhole on Commercial Street",
+      description: "Deep pothole causing vehicle damage.",
+      location: "123 Commercial Street",
+      date: "12/01/2024",
+      category: "pothole",
+      status: "in-progress",
+      image: "/images/pothole.jpg",
+    },
+    {
+      id: 3,
+      title: "Street light not working",
+      description: "Street light has been off for a week.",
+      location: "Jyoti Niwas College",
+      date: "08/01/2024",
+      category: "streetlight",
+      status: "resolved",
+      image: "/images/light.jpg",
+    },
+  ];
+
   return (
-    <>
-      <Navbar />
+    <div className="max-w-6xl mx-auto px-6 py-10">
+      <h1 className="text-3xl font-bold mb-6">Track Issues</h1>
 
-      <h2 className="text-2xl text-primary font-semibold text-center mt-6">
-        Your Issue Status
-      </h2>
-
-      <div className="max-w-xl mx-auto mt-6 space-y-6">
-        <div className="bg-white p-4 shadow-card rounded-lg border border-borderCol flex justify-between text-secondary font-medium">
-          <span>Reported</span>
-          <span>Accepted</span>
-          <span>In progress</span>
-          <span>Resolved</span>
-        </div>
-
-        <div className="bg-white p-4 shadow-card rounded-lg border border-borderCol flex justify-between text-secondary font-medium">
-          <span>Reported</span>
-          <span>Accepted</span>
-          <span>In progress</span>
-          <span>Resolved</span>
-        </div>
-      </div>
-    </>
+      {issues.map((item) => (
+        <IssueTrackRow key={item.id} issue={item} />
+      ))}
+    </div>
   );
 }
