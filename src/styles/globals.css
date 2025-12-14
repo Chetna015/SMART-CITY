@@ -1,70 +1,133 @@
-/* Import Tailwind (v4 syntax) */
+:root{
+  --primary-blue: #16a34a; /* updated to green (Tailwind green-600) per request */
+  --text: #1a1a1a;
+  --soft-text: #555555;
+  --border: #d1d5db;
+  --background: #f8f9fb;
+  --white: #ffffff;
+  --success: #28a745;
+  --danger: #dc3545;
+}
+
 @import "tailwindcss";
 
-/* Custom Theme (Tailwind v4 uses @theme instead of config file) */
-@theme {
-  --color-primary: #1A73E8;        /* Blue buttons & headings  */
-  --color-secondary: #5F6368;      /* Sub text */
-  --color-accent: #E8F0FE;         /* Light blue background */
-  --color-dark: #202124;           /* Dark text */
-  --color-light: #F8F9FA;          /* Light backgrounds */
-  --color-borderCol: #DADCE0;      /* Border color */
-  --color-success: #4CAF50;        /* Green success */
-  --color-danger: #EA4335;         /* Red danger */
-  --color-warning: #FBBC05;        /* Yellow warning */
+html,body,#root{
+  height:100%;
 }
 
-/* Default body styling */
-body {
-  background-color: var(--color-light);
-  color: var(--color-dark);
-  font-family: ui-sans-serif, system-ui;
+body{
+  margin:0;
+  background: var(--background);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
 }
 
-/* Common input styling */
-.input {
-  @apply w-full mt-1 mb-4 p-2 border border-borderCol rounded-lg outline-primary;
+/* Remove all border-radius used via utility classes */
+.rounded, .rounded-sm, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .rounded-full {
+  border-radius: 0 !important;
 }
 
-/* Buttons */
-.btn {
-  @apply bg-primary text-white py-2 px-4 rounded-lg font-medium 
-         hover:bg-blue-600 transition w-full;
+/* Remove all shadow utilities */
+.shadow, .shadow-sm, .shadow-md, .shadow-lg, .shadow-xl {
+  box-shadow: none !important;
 }
 
-.btn-secondary {
-  @apply bg-white text-primary border border-primary py-2 px-4 rounded-lg font-medium 
-         hover:bg-accent transition w-full;
+/* Override common tailwind colors to match design tokens */
+.text-blue-600, .text-blue-700, .bg-blue-600, .bg-blue-700, .text-blue-500, .bg-blue-50 {
+  color: var(--primary-blue) !important;
+  background-color: var(--primary-blue) !important;
 }
 
-/* Form box */
-.form-box {
-  @apply max-w-md mx-auto mt-12 bg-white p-8 rounded-xl shadow-lg;
+/* Map gray backgrounds to the uniform background */
+.bg-gray-50, .bg-gray-100, .bg-gray-200 {
+  background-color: var(--background) !important;
 }
 
-/* Hero section */
-.hero {
-  @apply text-center py-20 bg-accent;
+/* Text colors */
+.text-gray-700, .text-gray-600, .text-gray-500, .text-secondary {
+  color: var(--soft-text) !important;
 }
 
-/* Navbar styling */
-.navbar {
-  @apply w-full shadow-sm bg-white px-8 py-4 flex justify-between items-center;
-}
-.navbar a {
-  @apply mx-3 text-secondary hover:text-primary transition;
+/* Borders */
+.border-gray-200, .border-gray-300, .border-t, .border {
+  border-color: var(--border) !important;
 }
 
-/* Footer */
-.footer {
-  @apply text-center py-6 bg-white border-t border-borderCol mt-10;
+/* Utilities for consistent spacing and card look */
+.sa-card{
+  background: var(--white);
+  border: 1px solid var(--border);
+  padding: 1rem;
 }
 
-/* Cards */
-.stat-box {
-  @apply bg-white p-6 rounded-lg shadow-md border border-borderCol text-center;
+.sa-btn{
+  background: var(--primary-blue);
+  color: white;
+  padding: 0.625rem 1rem;
+  border: 1px solid var(--primary-blue);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
 }
 
-.status-card {
-  @apply bg-white p-4 rounded-lg shadow-md border border-borderCol flex justify-between;
+.sa-btn.secondary{
+  background: white;
+  color: var(--primary-blue);
+  border: 1px solid var(--primary-blue);
 }
+
+.sa-input{
+  width:100%;
+  padding:0.75rem;
+  border:1px solid var(--border);
+  outline:none;
+  background:white;
+}
+
+.container-padding{
+  padding-left:2rem;
+  padding-right:2rem;
+}
+
+/* Standardize table look */
+.sa-table th, .sa-table td{
+  padding:0.75rem 0.5rem;
+  border-bottom:1px solid var(--border);
+  color:var(--text);
+}
+
+/* Progress bar without rounded corners */
+.sa-progress-outer{
+  width:10rem;
+  height:0.6rem;
+  background:#e9ecef;
+  overflow:hidden;
+}
+.sa-progress-inner{
+  height:100%;
+}
+
+/* Fix link/active look in sidebar */
+.sa-nav-item{
+  display:flex;
+  align-items:center;
+  gap:0.75rem;
+  padding:0.5rem 0.75rem;
+  color:var(--soft-text);
+}
+.sa-nav-item.active{
+  background: rgba(22,163,74,0.06);
+  color:var(--primary-blue);
+}
+
+/* Navbar fixed spacing for content */
+.main-with-navbar{
+  padding-top:4rem; /* matches navbar height */
+}
+
+/* Ensure images/icons are square */
+.square-avatar{ width:40px; height:40px; object-fit:cover }
+
+/* Ensure no unexpected outline rounding from browsers */
+*{border-radius:0}

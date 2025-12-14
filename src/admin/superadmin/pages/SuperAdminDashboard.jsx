@@ -3,17 +3,26 @@ import {
   Pie,
   Cell,
   Tooltip,
-  Legend,
   BarChart,
   Bar,
   XAxis,
   YAxis,
   CartesianGrid,
 } from "recharts";
-import SuperAdminNavbar from "../components/SuperAdminNavbar";
-import SuperAdminSidebar from "../components/SuperAdminSidebar";
+import SuperAdminLayout from "../components/SuperAdminLayout";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function SuperAdminDashboard() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const ok = localStorage.getItem("superAdminAuth");
+    if (!ok) {
+      navigate("/superadmin/login");
+    }
+  }, [navigate]);
+
   const stats = [
     { label: "Total Issues", value: 1247 },
     { label: "Pending Issues", value: 250 },
@@ -40,25 +49,17 @@ export default function SuperAdminDashboard() {
   ];
 
   return (
-    <div className="flex bg-gray-100 min-h-screen">
-      {/* Sidebar */}
-      <SuperAdminSidebar />
-
-      <div className="flex-1">
-        <SuperAdminNavbar />
-
+    <SuperAdminLayout>
+      <div className="p-0">
         <div className="p-8">
           <h1 className="text-3xl font-bold mb-6">Dashboard Overview</h1>
 
           {/* Stats Cards */}
           <div className="grid grid-cols-4 gap-6">
             {stats.map((s, i) => (
-              <div
-                key={i}
-                className="bg-white shadow-md px-6 py-5 rounded-xl border border-gray-200"
-              >
-                <p className="text-gray-600">{s.label}</p>
-                <h2 className="text-3xl text-blue-600 font-semibold">
+              <div key={i} className="sa-card px-6 py-5">
+                <p className="text-[var(--soft-text)]">{s.label}</p>
+                <h2 className="text-3xl text-[var(--primary-blue)] font-semibold">
                   {s.value}
                 </h2>
               </div>
@@ -68,7 +69,7 @@ export default function SuperAdminDashboard() {
           {/* Graphs Section */}
           <div className="grid grid-cols-2 gap-6 mt-10">
             {/* PIE CHART */}
-            <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
+            <div className="sa-card p-6">
               <h2 className="font-semibold mb-4">Issues by Category</h2>
 
               <PieChart width={350} height={260}>
@@ -90,7 +91,7 @@ export default function SuperAdminDashboard() {
             </div>
 
             {/* BAR CHART */}
-            <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
+            <div className="sa-card p-6">
               <h2 className="font-semibold mb-4">Monthly Issues</h2>
 
               <BarChart width={400} height={260} data={monthlyData}>
@@ -98,12 +99,12 @@ export default function SuperAdminDashboard() {
                 <XAxis dataKey="month" />
                 <YAxis />
                 <Tooltip />
-                <Bar dataKey="issues" fill="#1A73E8" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="issues" fill="var(--primary-blue)" />
               </BarChart>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </SuperAdminLayout>
   );
 }

@@ -1,8 +1,11 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 export default function LoginCitizen() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const redirectTo = params.get("redirect") || "/dashboard";
 
   const [step, setStep] = useState(1); // 1 = mobile, 2 = OTP, 3 = username
   const [mobile, setMobile] = useState("");
@@ -37,74 +40,89 @@ export default function LoginCitizen() {
 
     alert("Login Success! Redirecting…");
 
-    navigate("/dashboard");
+    navigate(redirectTo);
   };
 
   return (
-    <div className="form-box">
-      <h2 className="text-3xl font-bold text-center text-primary mb-6">
-        Citizen Login
-      </h2>
+    <div className="min-h-screen flex items-center justify-center px-4">
+      <div className="sa-card w-full max-w-md">
+        <h2 className="text-3xl font-bold text-center text-[var(--text)] mb-6">
+          Citizen Login
+        </h2>
 
-      {/* STEP 1 — ENTER MOBILE */}
-      {step === 1 && (
-        <>
-          <label className="font-medium">Mobile Number</label>
-          <input
-            type="tel"
-            className="input"
-            placeholder="Enter mobile number"
-            maxLength="10"
-            value={mobile}
-            onChange={(e) => setMobile(e.target.value)}
-          />
+        {/* STEP 1 — ENTER MOBILE */}
+        {step === 1 && (
+          <div className="space-y-3">
+            <label className="font-medium text-[var(--soft-text)]">
+              Mobile Number
+            </label>
 
-          <button className="btn mt-2" onClick={sendOtp}>
-            Send OTP
-          </button>
-        </>
-      )}
+            <input
+              type="tel"
+              className="sa-input max-w-sm py-2 mt-2"
+              placeholder="Enter mobile number"
+              maxLength="10"
+              value={mobile}
+              onChange={(e) => setMobile(e.target.value)}
+            />
 
-      {/* STEP 2 — ENTER OTP */}
-      {step === 2 && (
-        <>
-          <label className="font-medium">Enter OTP</label>
-          <input
-            type="text"
-            className="input"
-            placeholder="Enter 6-digit OTP"
-            maxLength="6"
-            value={otp}
-            onChange={(e) => setOtp(e.target.value)}
-          />
+            <div className="flex justify-center mt-4">
+              <button
+                className="sa-btn mt-2 w-32 items-center"
+                onClick={sendOtp}
+              >
+                Send OTP
+              </button>
+            </div>
+          </div>
+        )}
 
-          <button className="btn mt-2" onClick={verifyOtp}>
-            Verify OTP
-          </button>
+        {/* STEP 2 — ENTER OTP */}
+        {step === 2 && (
+          <div className="space-y-4">
+            <label className="font-medium text-[var(--soft-text)]">
+              Enter OTP
+            </label>
+            <input
+              type="text"
+              className="sa-input"
+              placeholder="Enter 6-digit OTP"
+              maxLength="6"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+            />
 
-          <button className="btn-secondary mt-3" onClick={sendOtp}>
-            Resend OTP
-          </button>
-        </>
-      )}
+            <div className="flex gap-3">
+              <button className="sa-btn" onClick={verifyOtp}>
+                Verify OTP
+              </button>
+              <button className="sa-btn secondary" onClick={sendOtp}>
+                Resend OTP
+              </button>
+            </div>
+          </div>
+        )}
 
-      {/* STEP 3 — ENTER NAME */}
-      {step === 3 && (
-        <>
-          <label className="font-medium">Enter Your Name</label>
-          <input
-            type="text"
-            className="input"
-            placeholder="Your full name"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-          />
+        {/* STEP 3 — ENTER NAME */}
+        {step === 3 && (
+          <div className="space-y-4">
+            <label className="font-medium text-[var(--soft-text)]">
+              Enter Your Name
+            </label>
+            <input
+              type="text"
+              className="sa-input"
+              placeholder="Your full name"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+            />
 
-          <button className="btn mt-2" onClick={completeLogin}>
-            Continue to Dashboard
-          </button>
-        </>
-      )}
+            <button className="sa-btn w-full" onClick={completeLogin}>
+              Continue to Dashboard
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -4,16 +4,19 @@ import SuperAdminSidebar from "./SuperAdminSidebar";
 export default function SuperAdminLayout({ children }) {
   return (
     <div className="flex">
-      {/* Sidebar */}
-      <div className="fixed left-0 top-0 h-screen">
+      {/* Sidebar fixed left */}
+      <div className="fixed left-0 top-0 h-screen w-64">
         <SuperAdminSidebar />
       </div>
 
-      {/* Main Content */}
-      <div className="ml-64 flex-1 bg-gray-50 min-h-screen">
+      {/* Navbar fixed top (to the right of sidebar) */}
+      <div className="fixed left-64 right-0 top-0 z-40">
         <SuperAdminNavbar />
+      </div>
 
-        <div className="p-8 mt-16">{children}</div>
+      {/* Main Content area; add top padding so content doesn't sit under navbar */}
+      <div className="ml-64 flex-1 min-h-screen main-with-navbar bg-[var(--background)]">
+        <div className="p-8">{children}</div>
       </div>
     </div>
   );

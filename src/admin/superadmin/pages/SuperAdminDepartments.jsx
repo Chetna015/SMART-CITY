@@ -1,6 +1,4 @@
-import SuperAdminNavbar from "../components/SuperAdminNavbar";
-import SuperAdminSidebar from "../components/SuperAdminSidebar";
-
+import SuperAdminLayout from "../components/SuperAdminLayout";
 import {
   TreePine,
   Footprints,
@@ -43,27 +41,22 @@ export default function SuperAdminDepartments() {
   ];
 
   return (
-    <div className="flex">
-      <SuperAdminSidebar />
-      <div className="flex-1 bg-gray-50 min-h-screen">
-        <SuperAdminNavbar />
+    <SuperAdminLayout>
+      <div className="px-10 py-8">
+        <h1 className="text-3xl font-semibold mb-6">Departments</h1>
 
-        <div className="px-10 py-8">
-          <h1 className="text-3xl font-semibold mb-6">Departments</h1>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {departments.map((dept, index) => (
-              <div
-                key={index}
-                className="bg-white shadow-sm border rounded-xl p-6 flex items-center gap-4 hover:shadow-md transition cursor-pointer"
-              >
-                {dept.icon}
-                <span className="text-lg font-medium">{dept.name}</span>
-              </div>
-            ))}
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {departments.map((dept, index) => (
+            <div
+              key={index}
+              className="sa-card p-6 flex items-center gap-4 cursor-pointer"
+            >
+              {dept.icon}
+              <span className="text-lg font-medium">{dept.name}</span>
+            </div>
+          ))}
         </div>
       </div>
-    </div>
+    </SuperAdminLayout>
   );
 }

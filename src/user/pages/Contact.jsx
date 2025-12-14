@@ -70,27 +70,27 @@ export default function Contact() {
           </div>
 
           {/* RIGHT SIDE FORM */}
-          <div className="bg-white p-10 rounded-2xl border border-borderCol shadow-sm">
-            <h3 className="text-xl font-semibold text-dark mb-1">
+          <div className="sa-card p-10">
+            <h3 className="text-xl font-semibold text-[var(--text)] mb-1">
               Send us a Message
             </h3>
-            <p className="text-secondary mb-6">We'd love to hear from you</p>
+            <p className="text-[var(--soft-text)] mb-6">
+              We'd love to hear from you
+            </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input className="input bg-light" placeholder="First Name" />
-              <input className="input bg-light" placeholder="Last Name" />
+              <input className="sa-input" placeholder="First Name" />
+              <input className="sa-input" placeholder="Last Name" />
             </div>
 
-            <input className="input bg-light mt-4" placeholder="Email" />
-            <input className="input bg-light mt-4" placeholder="Subject" />
+            <input className="sa-input mt-4" placeholder="Email" />
+            <input className="sa-input mt-4" placeholder="Subject" />
             <textarea
-              className="input bg-light h-32 mt-4"
+              className="sa-input h-32 mt-4"
               placeholder="Your message here..."
             />
 
-            <button className="bg-green-700 text-white w-full py-3 rounded-lg mt-6 font-medium hover:bg-green-800 transition">
-              Send Message
-            </button>
+            <button className="sa-btn w-full mt-6">Send Message</button>
           </div>
         </div>
       </section>

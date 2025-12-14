@@ -1,6 +1,16 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function ReportIssue() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const user = localStorage.getItem("citizenName");
+    if (!user) {
+      // redirect to login and return here after login
+      navigate("/login?redirect=/report");
+    }
+  }, []);
   const [location, setLocation] = useState("");
   const [landmark, setLandmark] = useState("");
   const [area, setArea] = useState("");

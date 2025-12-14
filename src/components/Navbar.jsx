@@ -41,7 +41,7 @@ export default function Navbar() {
 
           {/* DROPDOWN */}
           {open && (
-            <div className="absolute right-0 mt-2 bg-white border border-borderCol rounded-md shadow-lg w-32">
+            <div className="absolute right-0 mt-2 bg-white border border-borderCol rounded-md shadow-lg w-44">
               <a
                 href="/login"
                 className="block px-4 py-2 hover:bg-accent text-secondary"
@@ -49,10 +49,16 @@ export default function Navbar() {
                 as Citizen
               </a>
               <a
-                href="/admin/login"
+                href="/superadmin/login"
                 className="block px-4 py-2 hover:bg-accent text-secondary"
               >
-                as Admin
+                as Super Admin
+              </a>
+              <a
+                href="/dept/login"
+                className="block px-4 py-2 hover:bg-accent text-secondary"
+              >
+                as Dept Admin
               </a>
             </div>
           )}

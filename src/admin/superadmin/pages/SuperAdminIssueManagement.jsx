@@ -28,17 +28,17 @@ export default function SuperAdminIssueManagement() {
     },
   ];
 
-  // STATUS → PROGRESS COLOR + WIDTH
+  // STATUS → PROGRESS COLOR + WIDTH (use hex colors for inline styles)
   const getProgress = (status) => {
     switch (status) {
       case "Pending":
-        return { width: "30%", color: "bg-yellow-500" };
+        return { width: "30%", color: "#f59e0b" };
       case "In-Progress":
-        return { width: "60%", color: "bg-blue-500" };
+        return { width: "60%", color: "var(--primary-blue)" };
       case "Resolved":
-        return { width: "100%", color: "bg-green-600" };
+        return { width: "100%", color: "#28a745" };
       default:
-        return { width: "0%", color: "" };
+        return { width: "0%", color: "transparent" };
     }
   };
 
@@ -47,10 +47,10 @@ export default function SuperAdminIssueManagement() {
       <div className="p-10">
         <h1 className="text-4xl font-bold mb-8">Issue Management</h1>
 
-        <div className="bg-white p-8 rounded-xl shadow border w-[95%]">
-          <table className="w-full">
+        <div className="sa-card w-[95%]">
+          <table className="w-full sa-table">
             <thead>
-              <tr className="border-b text-left font-semibold">
+              <tr className="text-left font-semibold">
                 <th className="py-3">Issue</th>
                 <th>Department</th>
                 <th>Reported By</th>
@@ -64,7 +64,7 @@ export default function SuperAdminIssueManagement() {
                 const progress = getProgress(item.status);
 
                 return (
-                  <tr key={item.id} className="border-b">
+                  <tr key={item.id}>
                     <td className="py-4">{item.title}</td>
                     <td>{item.department}</td>
                     <td>{item.reportedBy}</td>
@@ -72,14 +72,17 @@ export default function SuperAdminIssueManagement() {
 
                     {/* PROGRESS BAR */}
                     <td>
-                      <div className="w-40 bg-gray-200 rounded-full h-3 overflow-hidden">
+                      <div className="sa-progress-outer">
                         <div
-                          className={`${progress.color} h-3`}
-                          style={{ width: progress.width }}
+                          className="sa-progress-inner"
+                          style={{
+                            width: progress.width,
+                            background: progress.color.replace("bg-", ""),
+                          }}
                         ></div>
                       </div>
 
-                      <span className="text-sm text-gray-700 ml-1">
+                      <span className="text-sm text-[var(--soft-text)] ml-1">
                         {item.status}
                       </span>
                     </td>
