@@ -20,11 +20,6 @@ export default function Home() {
       title: "Citizen Intake",
       icon: Camera,
       shortDesc: "Capture photo/voice and tag location",
-      details: [
-        "Camera photo capture & voice note recording",
-        "Browser GPS auto-detection & landmark tagging",
-        "Instant one-click municipal grid submission"
-      ],
       connectorText: "Submits Report"
     },
     {
@@ -35,11 +30,6 @@ export default function Home() {
       title: "AI Analysis",
       icon: Brain,
       shortDesc: "Vision recognition & priority detection",
-      details: [
-        "Computer vision image feature extraction",
-        "Voice & text NLP urgency classification",
-        "Risk scoring (High / Medium / Low)"
-      ],
       connectorText: "Evaluates Urgency"
     },
     {
@@ -50,11 +40,6 @@ export default function Home() {
       title: "Auto-Dispatch",
       icon: Route,
       shortDesc: "Dispatched to responsible department",
-      details: [
-        "Rules engine maps to 7 municipal departments",
-        "Calculates resolution SLA (12h - 48h)",
-        "Instant department admin queue assignment"
-      ],
       connectorText: "Assigns Ward Squad"
     },
     {
@@ -65,11 +50,6 @@ export default function Home() {
       title: "Field Action",
       icon: CheckCircle2,
       shortDesc: "Squad triage & verified fix",
-      details: [
-        "Field crew dispatch & active status logging",
-        "SMS/In-app live status tracking to citizen",
-        "Completion remarks & verified closure"
-      ],
       connectorText: "Closes Ticket"
     },
     {
@@ -80,11 +60,6 @@ export default function Home() {
       title: "GIS & Insights",
       icon: Map,
       shortDesc: "Live maps & city analytics",
-      details: [
-        "City-wide Leaflet GIS hotspot plotting",
-        "Real-time SLA compliance dashboards",
-        "Public transparency & resolution metrics"
-      ],
       connectorText: "Live Feed"
     }
   ];
@@ -185,19 +160,9 @@ export default function Home() {
                       {stage.title}
                     </h3>
 
-                    <p className="text-xs text-gray-500 leading-relaxed mb-4">
+                    <p className="text-xs text-gray-500 leading-relaxed">
                       {stage.shortDesc}
                     </p>
-
-                    {/* BULLET SUB-POINTS */}
-                    <ul className="space-y-1.5 text-[11px] text-gray-600 border-t border-gray-100 pt-3">
-                      {stage.details.map((point, pIdx) => (
-                        <li key={pIdx} className="flex items-start gap-1.5">
-                          <span className="text-green-600 font-bold">›</span>
-                          <span className="leading-tight">{point}</span>
-                        </li>
-                      ))}
-                    </ul>
                   </div>
 
                   {/* BOTTOM DIRECTIONAL ARROW */}
@@ -215,30 +180,27 @@ export default function Home() {
           </div>
         </div>
 
-        {/* ACTIVE STAGE HIGHLIGHT CALLOUT */}
-        <div className="mt-8 bg-gray-50 border border-gray-200 p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-green-100 text-green-800 flex items-center justify-center font-bold text-lg shrink-0">
-              <Sparkles size={22} />
+        {/* BOTTOM WORKFLOW CTA */}
+        <div className="mt-8 bg-gray-50 border border-gray-200 p-5 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-green-100 text-green-800 flex items-center justify-center font-bold text-lg shrink-0">
+              <Sparkles size={20} />
             </div>
             <div>
-              <span className="text-xs font-bold text-green-700 uppercase tracking-wider">
-                Phase {workflowStages[activeStage].stageNumber}: {workflowStages[activeStage].badge}
-              </span>
-              <h4 className="text-base font-bold text-gray-900">
-                {workflowStages[activeStage].title} - Detailed Mechanism
+              <h4 className="text-sm font-bold text-gray-900">
+                Civic Issues Categorized & Dispatched in Under 60 Seconds
               </h4>
-              <p className="text-xs text-gray-600 mt-0.5">
-                {workflowStages[activeStage].details.join(" • ")}
+              <p className="text-xs text-gray-500">
+                Experience smart camera capture, voice recognition, and automated departmental routing.
               </p>
             </div>
           </div>
 
           <Link
             to="/report"
-            className="sa-btn px-5 py-2 text-xs font-semibold whitespace-nowrap self-stretch md:self-auto justify-center"
+            className="sa-btn px-5 py-2.5 text-xs font-semibold whitespace-nowrap self-stretch md:self-auto justify-center"
           >
-            Experience Workflow Now <ArrowRight size={14} />
+            Report an Issue Now <ArrowRight size={14} />
           </Link>
         </div>
       </section>
