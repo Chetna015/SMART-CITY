@@ -68,16 +68,7 @@ export default function LoginCitizen() {
           <h2 className="text-2xl font-extrabold text-gray-900 mt-2">
             Sign In with Mobile OTP
           </h2>
-          <p className="text-xs text-gray-500 mt-1">
-            Report local issues, track municipal progress, and receive live SMS updates.
-          </p>
         </div>
-
-        {redirectTo && (
-          <div className="mb-4 p-2.5 bg-amber-50 border border-amber-200 text-amber-800 text-xs text-center font-medium">
-            🔒 Sign in required to access {redirectTo === "/track" ? "Track Issue" : redirectTo === "/report" ? "Report Issue" : "Citizen Portal"}.
-          </div>
-        )}
 
         {infoMsg && (
           <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-800 text-xs flex items-center gap-2">
