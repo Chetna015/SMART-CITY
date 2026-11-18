@@ -73,6 +73,12 @@ export default function LoginCitizen() {
           </p>
         </div>
 
+        {redirectTo && (
+          <div className="mb-4 p-2.5 bg-amber-50 border border-amber-200 text-amber-800 text-xs text-center font-medium">
+            🔒 Sign in required to access {redirectTo === "/track" ? "Track Issue" : redirectTo === "/report" ? "Report Issue" : "Citizen Portal"}.
+          </div>
+        )}
+
         {infoMsg && (
           <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-800 text-xs flex items-center gap-2">
             <CheckCircle2 size={16} /> {infoMsg}

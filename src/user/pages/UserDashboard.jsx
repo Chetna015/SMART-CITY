@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Plus, CheckCircle, Clock, AlertTriangle, MapPin, ChevronRight, User, Phone, Shield } from "lucide-react";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import { getIssues, getNotifications } from "../../services/api";
 
 export default function UserDashboard() {
-  const [userName, setUserName] = useState("Citizen");
+  const navigate = useNavigate();
+  const [userName, setUserName] = useState("");
   const [userPhone, setUserPhone] = useState("9125900756");
   const [userIssues, setUserIssues] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -14,13 +15,19 @@ export default function UserDashboard() {
 
   useEffect(() => {
     const saved = localStorage.getItem("citizenName");
-    if (saved) setUserName(saved);
+    if (!saved) {
+      navigate("/login?redirect=/dashboard");
+      return;
+    }
+    setUserName(saved);
+    const phone = localStorage.getItem("citizenPhone") || "9125900756";
+    setUserPhone(phone);
 
     async function loadData() {
       try {
         const [issuesRes, notifsRes] = await Promise.all([
           getIssues(),
-          getNotifications({ phone: "9125900756" })
+          getNotifications({ phone })
         ]);
 
         if (issuesRes.success && issuesRes.issues) {

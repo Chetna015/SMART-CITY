@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { 
   Search, Filter, MapPin, Clock, CheckCircle2, AlertCircle, 
   ChevronRight, ArrowLeft, X, Sparkles, Building2, User 
@@ -8,6 +9,15 @@ import Footer from "../../components/Footer";
 import { getIssues, getIssueById, API_BASE_URL } from "../../services/api";
 
 export default function TrackIssues() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const user = localStorage.getItem("citizenName");
+    if (!user) {
+      navigate("/login?redirect=/track");
+    }
+  }, [navigate]);
+
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
