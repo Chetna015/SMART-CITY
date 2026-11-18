@@ -28,4 +28,7 @@ backend/node_modules
 *.db-wal
 uploads/*
 !uploads/*.svg
+*.exe
+cloudflared.exe
+
 

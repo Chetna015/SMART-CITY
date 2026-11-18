@@ -8,7 +8,7 @@ import { getIssues, getNotifications } from "../../services/api";
 export default function UserDashboard() {
   const navigate = useNavigate();
   const [userName, setUserName] = useState("");
-  const [userPhone, setUserPhone] = useState("9125900756");
+  const [userPhone, setUserPhone] = useState("");
   const [userIssues, setUserIssues] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,7 +20,7 @@ export default function UserDashboard() {
       return;
     }
     setUserName(saved);
-    const phone = localStorage.getItem("citizenPhone") || "9125900756";
+    const phone = localStorage.getItem("citizenPhone") || "";
     setUserPhone(phone);
 
     async function loadData() {
@@ -131,7 +131,7 @@ export default function UserDashboard() {
             <div className="space-y-3 text-sm text-gray-600">
               <p className="flex items-center justify-between">
                 <span className="text-gray-400">Mobile:</span>
-                <span className="font-medium text-gray-900">+91 9125900756</span>
+                <span className="font-medium text-gray-900">{userPhone ? `+91 ${userPhone}` : "Not provided"}</span>
               </p>
               <p className="flex items-center justify-between">
                 <span className="text-gray-400">Ward Zone:</span>

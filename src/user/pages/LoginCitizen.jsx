@@ -10,9 +10,9 @@ export default function LoginCitizen() {
   const redirectTo = params.get("redirect") || "/dashboard";
 
   const [step, setStep] = useState(1); // 1 = mobile, 2 = OTP, 3 = username
-  const [mobile, setMobile] = useState("9125900756");
+  const [mobile, setMobile] = useState("");
   const [otp, setOtp] = useState("");
-  const [username, setUsername] = useState("Yash");
+  const [username, setUsername] = useState("");
   const [infoMsg, setInfoMsg] = useState("");
 
   // STEP 1: SEND OTP
@@ -83,15 +83,17 @@ export default function LoginCitizen() {
               <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Mobile Number (10 Digits)
               </label>
-              <div className="relative">
-                <span className="absolute left-3 top-3 text-xs font-bold text-gray-500">+91</span>
+              <div className="flex border border-gray-300 focus-within:border-green-700 bg-white shadow-sm transition-all">
+                <span className="inline-flex items-center px-3.5 bg-gray-100 border-r border-gray-300 text-xs font-bold text-gray-700 select-none">
+                  +91
+                </span>
                 <input
                   type="tel"
-                  className="sa-input pl-12 text-sm font-medium"
-                  placeholder="9125900756"
+                  className="flex-1 px-3 py-2.5 text-sm font-medium outline-none text-gray-900 bg-white"
+                  placeholder="Enter 10-digit number"
                   maxLength="10"
                   value={mobile}
-                  onChange={(e) => setMobile(e.target.value)}
+                  onChange={(e) => setMobile(e.target.value.replace(/\D/g, ""))}
                 />
               </div>
             </div>
@@ -112,15 +114,17 @@ export default function LoginCitizen() {
               <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Enter 6-Digit OTP Sent to +91 {mobile}
               </label>
-              <div className="relative">
-                <KeyRound className="absolute left-3 top-3 text-gray-400" size={16} />
+              <div className="flex border border-gray-300 focus-within:border-green-700 bg-white shadow-sm transition-all">
+                <span className="inline-flex items-center px-3.5 bg-gray-100 border-r border-gray-300 text-gray-500">
+                  <KeyRound size={16} />
+                </span>
                 <input
                   type="text"
-                  className="sa-input pl-10 text-center tracking-widest font-mono font-bold text-lg"
+                  className="flex-1 px-3 py-2.5 text-center tracking-widest font-mono font-bold text-lg outline-none text-gray-900 bg-white"
                   placeholder="123456"
                   maxLength="6"
                   value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
                 />
               </div>
               <p className="text-[11px] text-gray-400 mt-1 text-center">
@@ -146,12 +150,14 @@ export default function LoginCitizen() {
               <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Citizen Full Name
               </label>
-              <div className="relative">
-                <User className="absolute left-3 top-3 text-gray-400" size={16} />
+              <div className="flex border border-gray-300 focus-within:border-green-700 bg-white shadow-sm transition-all">
+                <span className="inline-flex items-center px-3.5 bg-gray-100 border-r border-gray-300 text-gray-500">
+                  <User size={16} />
+                </span>
                 <input
                   type="text"
-                  className="sa-input pl-10 text-sm font-medium"
-                  placeholder="e.g. Yash Srivastava"
+                  className="flex-1 px-3 py-2.5 text-sm font-medium outline-none text-gray-900 bg-white"
+                  placeholder="Enter your full name"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                 />

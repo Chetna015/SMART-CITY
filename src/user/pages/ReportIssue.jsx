@@ -12,15 +12,17 @@ export default function ReportIssue() {
   const navigate = useNavigate();
 
   // Citizen info from session
-  const [citizenName, setCitizenName] = useState("Citizen");
-  const [citizenPhone, setCitizenPhone] = useState("9125900756");
+  const [citizenName, setCitizenName] = useState("");
+  const [citizenPhone, setCitizenPhone] = useState("");
 
   useEffect(() => {
     const user = localStorage.getItem("citizenName");
+    const phone = localStorage.getItem("citizenPhone");
     if (!user) {
       navigate("/login?redirect=/report");
     } else {
       setCitizenName(user);
+      if (phone) setCitizenPhone(phone);
     }
   }, [navigate]);
 

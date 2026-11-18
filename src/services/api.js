@@ -3,7 +3,8 @@
  * Connects frontend UI to backend REST API at http://localhost:5000
  */
 
-const API_BASE_URL = 'http://localhost:5000';
+// Use relative URL so Vite proxy forwards requests to http://localhost:5000
+const API_BASE_URL = "";
 
 export async function fetchHealth() {
   const res = await fetch(`${API_BASE_URL}/api/health`);
