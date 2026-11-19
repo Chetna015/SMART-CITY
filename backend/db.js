@@ -86,6 +86,15 @@ export function initDatabase() {
       notes TEXT,
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
     );
+
+    CREATE TABLE IF NOT EXISTS otps (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      phone TEXT NOT NULL,
+      otp_hash TEXT NOT NULL,
+      attempts INTEGER DEFAULT 0,
+      expires_at_ms INTEGER NOT NULL,
+      created_at_ms INTEGER NOT NULL
+    );
   `);
 
   seedData();
