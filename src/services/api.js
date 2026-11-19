@@ -113,4 +113,31 @@ export async function markNotificationRead(id) {
   return res.json();
 }
 
+export async function sendOtp(phone) {
+  const res = await fetch(`${API_BASE_URL}/api/auth/send-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone })
+  });
+  return res.json();
+}
+
+export async function verifyOtp(phone, otp) {
+  const res = await fetch(`${API_BASE_URL}/api/auth/verify-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone, otp })
+  });
+  return res.json();
+}
+
+export async function completeProfile(profileToken, name) {
+  const res = await fetch(`${API_BASE_URL}/api/auth/complete-profile`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profileToken, name })
+  });
+  return res.json();
+}
+
 export { API_BASE_URL };
