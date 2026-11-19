@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { Phone, KeyRound, User, ArrowRight, CheckCircle2 } from "lucide-react";
-import { loginUser } from "../../services/api";
+import { KeyRound, User, ArrowRight, CheckCircle2 } from "lucide-react";
+import {
+  sendOtp as sendOtpApi,
+  verifyOtp as verifyOtpApi,
+  completeProfile,
+} from "../../services/api";
 
 export default function LoginCitizen() {
   const navigate = useNavigate();
@@ -9,50 +13,95 @@ export default function LoginCitizen() {
   const params = new URLSearchParams(location.search);
   const redirectTo = params.get("redirect") || "/dashboard";
 
-  const [step, setStep] = useState(1); // 1 = mobile, 2 = OTP, 3 = username
+  const [step, setStep] = useState(1); // 1 = mobile, 2 = OTP, 3 = name (first time only)
   const [mobile, setMobile] = useState("");
   const [otp, setOtp] = useState("");
   const [username, setUsername] = useState("");
   const [infoMsg, setInfoMsg] = useState("");
+  const [profileToken, setProfileToken] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const saveSession = (user) => {
+    localStorage.setItem("citizenName", user.name);
+    localStorage.setItem("citizenPhone", user.phone || mobile);
+    localStorage.setItem("userRole", "citizen");
+    navigate(redirectTo);
+  };
 
   // STEP 1: SEND OTP
-  const sendOtp = () => {
+  const sendOtp = async () => {
     if (mobile.length !== 10) {
       alert("Please enter a valid 10-digit mobile number.");
       return;
     }
-
-    setInfoMsg("OTP 123456 generated & dispatched to +91 " + mobile);
-    setStep(2);
+    setLoading(true);
+    try {
+      const res = await sendOtpApi(mobile);
+      if (!res.success) {
+        alert(res.message || "Could not send OTP.");
+        return;
+      }
+      setInfoMsg(
+        res.devOtp
+          ? `Dev mode - your OTP is ${res.devOtp}`
+          : `OTP sent to +91 ${mobile}`
+      );
+      setOtp("");
+      setStep(2);
+    } catch {
+      alert("Network error. Is the backend running?");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // STEP 2: VERIFY OTP
-  const verifyOtp = () => {
-    if (!otp || otp.length < 4) {
-      alert("Please enter a valid OTP (e.g. 123456).");
+  const verifyOtp = async () => {
+    if (otp.length !== 6) {
+      alert("Please enter the 6-digit OTP.");
       return;
     }
-    setStep(3);
+    setLoading(true);
+    try {
+      const res = await verifyOtpApi(mobile, otp);
+      if (!res.success) {
+        alert(res.message || "Verification failed.");
+        return;
+      }
+      if (res.needsName) {
+        setProfileToken(res.profileToken);
+        setInfoMsg("");
+        setStep(3);
+      } else {
+        saveSession(res.user);
+      }
+    } catch {
+      alert("Network error. Is the backend running?");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // STEP 3: COMPLETE CITIZEN LOGIN
+  // STEP 3: NEW USER ENTERS NAME
   const completeLogin = async () => {
     if (!username.trim()) {
       alert("Please enter your name");
       return;
     }
-
+    setLoading(true);
     try {
-      await loginUser({ phone: mobile, username });
-    } catch (err) {
-      console.warn("Backend auth sync warning:", err);
+      const res = await completeProfile(profileToken, username);
+      if (!res.success) {
+        alert(res.message || "Could not finish registration.");
+        setStep(1);
+        return;
+      }
+      saveSession(res.user);
+    } catch {
+      alert("Network error. Is the backend running?");
+    } finally {
+      setLoading(false);
     }
-
-    localStorage.setItem("citizenName", username);
-    localStorage.setItem("citizenPhone", mobile);
-    localStorage.setItem("userRole", "citizen");
-
-    navigate(redirectTo);
   };
 
   return (
@@ -101,8 +150,9 @@ export default function LoginCitizen() {
             <button
               className="w-full sa-btn py-3 justify-center text-sm font-bold shadow-sm"
               onClick={sendOtp}
+              disabled={loading}
             >
-              Generate OTP Code <ArrowRight size={16} />
+              {loading ? "Sending..." : "Generate OTP Code"} <ArrowRight size={16} />
             </button>
           </div>
         )}
@@ -121,29 +171,34 @@ export default function LoginCitizen() {
                 <input
                   type="text"
                   className="flex-1 px-3 py-2.5 text-center tracking-widest font-mono font-bold text-lg outline-none text-gray-900 bg-white"
-                  placeholder="123456"
+                  placeholder="------"
                   maxLength="6"
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
                 />
               </div>
-              <p className="text-[11px] text-gray-400 mt-1 text-center">
-                (Demo OTP code: <code className="text-green-700">123456</code>)
-              </p>
             </div>
 
             <div className="flex gap-2">
-              <button className="flex-1 sa-btn py-2.5 justify-center text-xs font-bold" onClick={verifyOtp}>
-                Verify OTP
+              <button
+                className="flex-1 sa-btn py-2.5 justify-center text-xs font-bold"
+                onClick={verifyOtp}
+                disabled={loading}
+              >
+                {loading ? "Verifying..." : "Verify OTP"}
               </button>
-              <button className="sa-btn secondary text-xs py-2.5" onClick={sendOtp}>
+              <button
+                className="sa-btn secondary text-xs py-2.5"
+                onClick={sendOtp}
+                disabled={loading}
+              >
                 Resend
               </button>
             </div>
           </div>
         )}
 
-        {/* STEP 3 — ENTER CITIZEN NAME */}
+        {/* STEP 3 — ENTER CITIZEN NAME (new users only) */}
         {step === 3 && (
           <div className="space-y-4">
             <div>
@@ -167,8 +222,9 @@ export default function LoginCitizen() {
             <button
               className="w-full sa-btn py-3 justify-center text-sm font-bold shadow-sm"
               onClick={completeLogin}
+              disabled={loading}
             >
-              Complete Registration & Proceed <ArrowRight size={16} />
+              {loading ? "Saving..." : "Complete Registration & Proceed"} <ArrowRight size={16} />
             </button>
           </div>
         )}
