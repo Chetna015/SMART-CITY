@@ -1,315 +1,685 @@
-import { DatabaseSync } from 'node:sqlite';
+import express from 'express';
+import cors from 'cors';
+import multer from 'multer';
 import path from 'node:path';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { db, initDatabase } from './db.js';
+import { analyzeCivicReport } from './ai_engine.js';
+import crypto from 'node:crypto';
+import { sendOtpEmail } from './mailer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const dbPath = path.resolve(__dirname, '..', 'ecosaathi.db');
+const uploadsDir = path.resolve(__dirname, '..', 'uploads');
 
-export const db = new DatabaseSync(dbPath);
-
-// Enable WAL mode and foreign keys for high performance
-db.exec('PRAGMA journal_mode = WAL;');
-db.exec('PRAGMA foreign_keys = ON;');
-
-export function initDatabase() {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS departments (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT UNIQUE NOT NULL,
-      category_key TEXT NOT NULL,
-      head TEXT,
-      phone TEXT,
-      email TEXT,
-      zone TEXT,
-      active INTEGER DEFAULT 1,
-      sla_hours INTEGER DEFAULT 24
-    );
-
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      email TEXT,
-      phone TEXT,
-      role TEXT NOT NULL DEFAULT 'citizen',
-      department_id INTEGER,
-      password TEXT,
-      created_at TEXT DEFAULT (datetime('now', 'localtime'))
-    );
-
-    CREATE TABLE IF NOT EXISTS issues (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tracking_id TEXT UNIQUE NOT NULL,
-      title TEXT NOT NULL,
-      description TEXT,
-      category TEXT NOT NULL,
-      priority TEXT NOT NULL DEFAULT 'Medium',
-      status TEXT NOT NULL DEFAULT 'pending',
-      lat REAL,
-      lng REAL,
-      area TEXT,
-      landmark TEXT,
-      location_address TEXT,
-      image_url TEXT,
-      audio_url TEXT,
-      ai_confidence REAL DEFAULT 0.92,
-      ai_tags TEXT,
-      ai_analysis TEXT,
-      reporter_name TEXT,
-      reporter_phone TEXT,
-      department_id INTEGER,
-      department_name TEXT,
-      assigned_staff TEXT,
-      rejection_reason TEXT,
-      resolution_remarks TEXT,
-      created_at TEXT DEFAULT (datetime('now', 'localtime')),
-      updated_at TEXT DEFAULT (datetime('now', 'localtime'))
-    );
-
-    CREATE TABLE IF NOT EXISTS notifications (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_phone TEXT,
-      role TEXT DEFAULT 'citizen',
-      issue_id INTEGER,
-      title TEXT NOT NULL,
-      message TEXT NOT NULL,
-      type TEXT DEFAULT 'info',
-      is_read INTEGER DEFAULT 0,
-      created_at TEXT DEFAULT (datetime('now', 'localtime'))
-    );
-
-    CREATE TABLE IF NOT EXISTS activity_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      issue_id INTEGER NOT NULL,
-      action TEXT NOT NULL,
-      actor TEXT NOT NULL,
-      notes TEXT,
-      created_at TEXT DEFAULT (datetime('now', 'localtime'))
-    );
-
-    CREATE TABLE IF NOT EXISTS otps (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      phone TEXT NOT NULL,
-      otp_hash TEXT NOT NULL,
-      attempts INTEGER DEFAULT 0,
-      expires_at_ms INTEGER NOT NULL,
-      created_at_ms INTEGER NOT NULL
-    );
-  `);
-
-  seedData();
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-function seedData() {
-  // Check if departments exist
-  const deptCount = db.prepare('SELECT count(*) as count FROM departments').get().count;
-  if (deptCount === 0) {
-    const insertDept = db.prepare(`
-      INSERT INTO departments (name, category_key, head, phone, email, zone, active, sla_hours)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `);
+// Initialize database schema and seeds
+initDatabase();
 
-    const depts = [
-      ['Health & Sanitation Department', 'garbage', 'Sonia Verma', '+91 91234 56789', 'sanitation@eco.gov.in', 'Zone A - Sigra & Central', 1, 24],
-      ['Public Works Department (PWD)', 'pothole', 'Ramesh Kumar', '+91 98765 43210', 'pwd@eco.gov.in', 'Zone B - Cantt & North', 1, 48],
-      ['Electricity & Lighting Board', 'streetlight', 'Anil Sharma', '+91 98221 12345', 'lighting@eco.gov.in', 'Zone C - DLW & South', 1, 18],
-      ['Jal Sansthan (Water Works)', 'water_leak', 'Pooja Tiwari', '+91 99112 33445', 'water@eco.gov.in', 'Zone D - Bhelupur & Dashashwamedh', 1, 12],
-      ['Sewage & Drainage Department', 'sewage', 'Vikram Yadav', '+91 94150 99887', 'sewage@eco.gov.in', 'Zone E - Assi & Lanka', 1, 24],
-      ['Traffic & Transport Authority', 'traffic_signal', 'Manish Gupta', '+91 93350 44556', 'traffic@eco.gov.in', 'Zone Central', 1, 6],
-      ['Horticulture & Urban Forestry', 'tree', 'Dr. Radhika Sen', '+91 97210 77665', 'parks@eco.gov.in', 'All Zones', 1, 36],
-    ];
+const app = express();
+const PORT = process.env.PORT || 5000;
 
-    for (const d of depts) {
-      insertDept.run(...d);
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Serve uploaded media
+app.use('/uploads', express.static(uploadsDir));
+
+// Configure Multer for photo and audio storage
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, uploadsDir),
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname) || (file.mimetype.includes('audio') ? '.mp3' : '.jpg');
+    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+  }
+});
+const upload = multer({ storage });
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', service: 'Eco-Saathi Civic Engine', time: new Date().toISOString() });
+});
+
+// -----------------------------------------------------------------------------
+// 1. AI PREVIEW / REAL-TIME ANALYSIS ENDPOINT
+// -----------------------------------------------------------------------------
+app.post('/api/ai/analyze', upload.single('image'), (req, res) => {
+  try {
+    const { description = '', landmark = '', area = '', audioTranscript = '' } = req.body;
+    const imageFilename = req.file ? req.file.filename : (req.body.imageFilename || '');
+
+    const analysis = analyzeCivicReport({
+      imageFilename,
+      description,
+      audioTranscript,
+      landmark,
+      area
+    });
+
+    res.json({
+      success: true,
+      analysis
+    });
+  } catch (err) {
+    console.error('AI Analysis Error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// 2. VOICE NOTE UPLOAD ENDPOINT (as called by ReportIssue.jsx)
+// -----------------------------------------------------------------------------
+app.post('/uploadVoice', upload.single('voiceNote'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No voice file received' });
     }
+
+    const audioUrl = `/uploads/${req.file.filename}`;
+    res.json({
+      success: true,
+      audioUrl,
+      filename: req.file.filename,
+      message: 'Voice note uploaded and processed successfully'
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
+});
 
-  // Seed default admin accounts
-  const userCount = db.prepare('SELECT count(*) as count FROM users').get().count;
-  if (userCount === 0) {
-    const insertUser = db.prepare(`
-      INSERT INTO users (name, email, phone, role, department_id, password)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
+// -----------------------------------------------------------------------------
+// 3. REPORT ISSUE ENDPOINT (Called by ReportIssue.jsx)
+// -----------------------------------------------------------------------------
+const uploadFields = upload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'voiceNote', maxCount: 1 }
+]);
 
-    insertUser.run('Super Administrator', 'admin@eco.com', '+91 99999 00001', 'superadmin', null, '123456');
-    insertUser.run('Sanitation Dept Admin', 'dept@eco.com', '+91 91234 56789', 'dept_admin', 1, '123456');
-    insertUser.run('PWD Admin', 'pwd@dept.com', '+91 98765 43210', 'dept_admin', 2, '123456');
-    insertUser.run('Lighting Admin', 'lighting@dept.com', '+91 98221 12345', 'dept_admin', 3, '123456');
-    insertUser.run('Citizen Yash', 'yashcube07@gmail.com', '9125900756', 'citizen', null, '123456');
-  }
+app.post('/report', uploadFields, (req, res) => {
+  try {
+    const {
+      description = '',
+      location = '',
+      landmark = '',
+      area = '',
+      lat = null,
+      lng = null,
+      reporter_name = 'Citizen',
+      reporter_phone = '9125900756',
+      userUrgency = ''
+    } = req.body;
 
-  // Seed realistic sample issues around Varanasi for immediate interactive map and analytics visualization
-  const issueCount = db.prepare('SELECT count(*) as count FROM issues').get().count;
-  if (issueCount === 0) {
-    const insertIssue = db.prepare(`
+    const imageFile = req.files && req.files['image'] ? req.files['image'][0] : null;
+    const voiceFile = req.files && req.files['voiceNote'] ? req.files['voiceNote'][0] : null;
+
+    const imageUrl = imageFile ? `/uploads/${imageFile.filename}` : null;
+    const audioUrl = voiceFile ? `/uploads/${voiceFile.filename}` : null;
+
+    // Run AI Engine Analysis
+    const aiResult = analyzeCivicReport({
+      imageFilename: imageFile ? imageFile.originalname : '',
+      description,
+      landmark,
+      area
+    });
+
+    const category = aiResult.category;
+    // User can manually set urgency or accept AI priority
+    const priority = userUrgency || aiResult.priority;
+    const department_id = aiResult.routing.department_id;
+    const department_name = aiResult.routing.department_name;
+
+    // Generate unique tracking ID
+    const randomNum = Math.floor(1000 + Math.random() * 9000);
+    const tracking_id = `ECO-${randomNum}`;
+
+    const parsedLat = lat ? parseFloat(lat) : 25.3176;
+    const parsedLng = lng ? parseFloat(lng) : 82.9739;
+
+    const title = description.length > 50 ? description.substring(0, 47) + '...' : (description || `Reported ${category} issue near ${area || landmark || 'city'}`);
+
+    const stmt = db.prepare(`
       INSERT INTO issues (
         tracking_id, title, description, category, priority, status,
         lat, lng, area, landmark, location_address, image_url, audio_url,
         ai_confidence, ai_tags, ai_analysis, reporter_name, reporter_phone,
-        department_id, department_name, assigned_staff, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', ?))
+        department_id, department_name, created_at
+      ) VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))
     `);
 
-    const sampleIssues = [
-      [
-        'ECO-2401',
-        'Overflowing garbage bin near Sigra Vegetable Market',
-        'Municipal waste container completely filled, solid waste spilling onto the main pedestrian sidewalk creating sanitary hazard.',
-        'garbage',
-        'High',
-        'pending',
-        25.3200,
-        82.9860,
-        'Sigra Market',
-        'Near SBI Sigra Branch',
-        'Sigra, Varanasi, UP 221002',
-        '/uploads/sample_garbage.svg',
-        null,
-        0.95,
-        '["waste", "overflowing", "sanitation_hazard", "pedestrian_block"]',
-        'AI detected high accumulation of solid organic & plastic waste with 95% confidence. Urgency high due to proximity to market.',
-        'Rajesh Kumar',
-        '9876543210',
-        1,
-        'Health & Sanitation Department',
-        null,
-        '-2 hours'
-      ],
-      [
-        'ECO-2402',
-        'Large deep pothole on Commercial Road',
-        'Deep circular pothole approximately 1.5m wide near junction, dangerous for two-wheelers especially during evening traffic.',
-        'pothole',
-        'High',
-        'in-progress',
-        25.3100,
-        82.9780,
-        'Cantt Road',
-        'Opposite Railway Officer Colony',
-        'Cantt Road, Varanasi, UP 221002',
-        '/uploads/sample_pothole.svg',
-        null,
-        0.92,
-        '["asphalt_depression", "structural_damage", "accident_risk"]',
-        'AI detected asphalt fissure and deep depression exceeding 10cm depth. Poses severe road safety hazard.',
-        'Priya Sharma',
-        '9811122233',
-        2,
-        'Public Works Department (PWD)',
-        'Inspector Amit Verma',
-        '-1 days'
-      ],
-      [
-        'ECO-2403',
-        'Streetlight pole non-functional near DLW Main Gate',
-        'Pole #DLW-44 has been dark for past 4 days, causing safety concerns for university students and residents returning late.',
-        'streetlight',
-        'Medium',
-        'accepted',
-        25.3176,
-        82.9739,
-        'DLW Gate',
-        'Near DLW Hospital Crossing',
-        'DLW Colony, Varanasi, UP 221004',
-        '/uploads/sample_light.svg',
-        null,
-        0.96,
-        '["electrical", "illumination_failure", "safety_corridor"]',
-        'AI verified streetlight bulb/wiring failure from citizen voice description & photo.',
-        'Amit Patel',
-        '9944455566',
-        3,
-        'Electricity & Lighting Board',
-        'Electrician Sunil Rao',
-        '-3 days'
-      ],
-      [
-        'ECO-2404',
-        'Water pipeline burst causing road flooding in Bhelupur',
-        'Underground fresh water main line leaking continuously, flooding local street and low water pressure in nearby houses.',
-        'water_leak',
-        'High',
-        'in-progress',
-        25.3050,
-        82.9920,
-        'Bhelupur',
-        'Near Kamachha Crossing',
-        'Bhelupur, Varanasi, UP 221010',
-        '/uploads/sample_water.svg',
-        null,
-        0.91,
-        '["freshwater_loss", "pipe_rupture", "flooding"]',
-        'AI detected significant surface water accumulation stemming from subsurface pressurized water main.',
-        'Sneha Reddy',
-        '9711133344',
-        4,
-        'Jal Sansthan (Water Works)',
-        'Engineer Ravi Kant',
-        '-4 hours'
-      ],
-      [
-        'ECO-2405',
-        'Broken tree branch blocking traffic lane on Assi Road',
-        'Large neem tree branch fractured after heavy winds, partially blocking two-way vehicular movement near Assi Ghat turn.',
-        'tree',
-        'Medium',
-        'resolved',
-        25.2980,
-        83.0030,
-        'Assi Ghat',
-        'Near Assi Crossing',
-        'Assi Ghat Road, Varanasi, UP 221005',
-        '/uploads/sample_tree.svg',
-        null,
-        0.94,
-        '["fallen_branch", "traffic_obstruction", "horticulture"]',
-        'AI detected vegetative road obstruction with 94% confidence.',
-        'Vikram Singh',
-        '9415012345',
-        7,
-        'Horticulture & Urban Forestry',
-        'Rescue Squad 3',
-        '-5 days'
-      ],
-      [
-        'ECO-2406',
-        'Open sewage manhole lid near Dashashwamedh',
-        'Hazardous open manhole cover left uncovered during night, urgent barricading and replacement needed.',
-        'sewage',
-        'High',
-        'resolved',
-        25.3070,
-        83.0100,
-        'Dashashwamedh',
-        'Near Godowlia Roundabout',
-        'Godowlia, Varanasi, UP 221001',
-        '/uploads/sample_sewage.svg',
-        null,
-        0.98,
-        '["open_manhole", "extreme_fall_hazard", "sewer_overflow"]',
-        'AI flagged critical pedestrian hazard: Missing manhole lid in high foot-traffic heritage corridor.',
-        'Alok Mishra',
-        '9125900756',
-        5,
-        'Sewage & Drainage Department',
-        'Sanitation Officer S. Singh',
-        '-6 days'
-      ]
-    ];
+    const info = stmt.run(
+      tracking_id,
+      title,
+      description,
+      category,
+      priority,
+      parsedLat,
+      parsedLng,
+      area || 'Local Ward',
+      landmark || 'Near Location',
+      location || `${area}, ${landmark}`,
+      imageUrl,
+      audioUrl,
+      aiResult.confidence,
+      JSON.stringify(aiResult.tags),
+      aiResult.aiAnalysis,
+      reporter_name,
+      reporter_phone,
+      department_id,
+      department_name
+    );
 
-    for (const item of sampleIssues) {
-      insertIssue.run(...item);
+    const issueId = Number(info.lastInsertRowid);
+
+    // Create Activity Log
+    db.prepare(`
+      INSERT INTO activity_logs (issue_id, action, actor, notes)
+      VALUES (?, 'Issue Reported & Auto-Routed', 'Eco-Saathi AI Engine', ?)
+    `).run(issueId, aiResult.routing.routing_rule);
+
+    // Create Notification for Citizen
+    db.prepare(`
+      INSERT INTO notifications (user_phone, role, issue_id, title, message, type)
+      VALUES (?, 'citizen', ?, 'Issue Reported Successfully', ?, 'info')
+    `).run(
+      reporter_phone,
+      issueId,
+      `Your report ${tracking_id} has been submitted and auto-routed to ${department_name}. Estimated SLA: ${aiResult.routing.sla_hours}h.`
+    );
+
+    // Create Notification for Department Admin
+    db.prepare(`
+      INSERT INTO notifications (user_phone, role, issue_id, title, message, type)
+      VALUES (?, 'dept_admin', ?, 'New Civic Issue Assigned', ?, 'urgent')
+    `).run(
+      department_id.toString(),
+      issueId,
+      `New ${priority} priority ${category} issue (${tracking_id}) assigned to your department at ${area || landmark}.`
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Issue reported and auto-routed successfully!',
+      issue: {
+        id: issueId,
+        tracking_id,
+        title,
+        category,
+        priority,
+        department_name,
+        ai_confidence: aiResult.confidence,
+        sla_hours: aiResult.routing.sla_hours
+      }
+    });
+  } catch (err) {
+    console.error('Error reporting issue:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Also support JSON /api/issues endpoint
+app.post('/api/issues', (req, res) => {
+  // Redirect to handler or process JSON
+  req.url = '/report';
+  app.handle(req, res);
+});
+
+// -----------------------------------------------------------------------------
+// 4. GET ALL ISSUES WITH FILTERS
+// -----------------------------------------------------------------------------
+app.get('/api/issues', (req, res) => {
+  try {
+    const { department_id, status, priority, category, search, phone } = req.query;
+
+    let query = 'SELECT * FROM issues WHERE 1=1';
+    const params = [];
+
+    if (department_id) {
+      query += ' AND department_id = ?';
+      params.push(Number(department_id));
+    }
+    if (status && status !== 'all') {
+      query += ' AND status = ?';
+      params.push(status.toLowerCase());
+    }
+    if (priority && priority !== 'all') {
+      query += ' AND priority = ?';
+      params.push(priority);
+    }
+    if (category && category !== 'all') {
+      query += ' AND category = ?';
+      params.push(category.toLowerCase());
+    }
+    if (phone) {
+      query += ' AND reporter_phone = ?';
+      params.push(phone);
+    }
+    if (search) {
+      query += ' AND (title LIKE ? OR description LIKE ? OR tracking_id LIKE ? OR area LIKE ?)';
+      const s = `%${search}%`;
+      params.push(s, s, s, s);
     }
 
-    // Insert sample notifications
-    const insertNotif = db.prepare(`
-      INSERT INTO notifications (user_phone, role, issue_id, title, message, type)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
+    query += ' ORDER BY id DESC';
 
-    insertNotif.run('9125900756', 'citizen', 6, 'Issue Resolved!', 'Your report ECO-2406 (Open sewage manhole lid) has been successfully resolved by Sewage & Drainage Department.', 'status_change');
-    insertNotif.run('9811122233', 'citizen', 2, 'Work Started', 'Your report ECO-2402 (Large deep pothole) is now In-Progress with PWD repair team.', 'status_change');
-    insertNotif.run('91234 56789', 'dept_admin', 1, 'New Urgent Report Routed', 'AI Engine routed high priority issue ECO-2401 to Health & Sanitation Department.', 'urgent');
+    const issues = db.prepare(query).all(...params);
+    res.json({ success: true, count: issues.length, issues });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
-}
+});
+
+// -----------------------------------------------------------------------------
+// 5. GET SINGLE ISSUE DETAILS & TIMELINE
+// -----------------------------------------------------------------------------
+app.get('/api/issues/:id', (req, res) => {
+  try {
+    const issue = db.prepare('SELECT * FROM issues WHERE id = ? OR tracking_id = ?').get(req.params.id, req.params.id);
+    if (!issue) {
+      return res.status(404).json({ success: false, message: 'Issue not found' });
+    }
+
+    const timeline = db.prepare('SELECT * FROM activity_logs WHERE issue_id = ? ORDER BY id ASC').all(issue.id);
+
+    res.json({ success: true, issue, timeline });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// 6. UPDATE ISSUE STATUS (Accept, In-Progress, Resolve, Reject)
+// -----------------------------------------------------------------------------
+app.patch('/api/issues/:id/status', (req, res) => {
+  try {
+    const issueId = Number(req.params.id);
+    const { status, assigned_staff, rejection_reason, resolution_remarks, actor = 'Department Staff' } = req.body;
+
+    const existing = db.prepare('SELECT * FROM issues WHERE id = ?').get(issueId);
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Issue not found' });
+    }
+
+    let updateQuery = 'UPDATE issues SET status = ?, updated_at = datetime(\'now\', \'localtime\')';
+    const params = [status.toLowerCase()];
+
+    if (assigned_staff) {
+      updateQuery += ', assigned_staff = ?';
+      params.push(assigned_staff);
+    }
+    if (rejection_reason) {
+      updateQuery += ', rejection_reason = ?';
+      params.push(rejection_reason);
+    }
+    if (resolution_remarks) {
+      updateQuery += ', resolution_remarks = ?';
+      params.push(resolution_remarks);
+    }
+
+    updateQuery += ' WHERE id = ?';
+    params.push(issueId);
+
+    db.prepare(updateQuery).run(...params);
+
+    // Record activity log
+    let notes = `Status updated to ${status}.`;
+    if (status === 'accepted') notes = `Accepted by department. Assigned to: ${assigned_staff || 'Field Crew'}.`;
+    if (status === 'rejected') notes = `Rejected. Reason: ${rejection_reason}`;
+    if (status === 'resolved') notes = `Resolved. Remarks: ${resolution_remarks || 'Inspection and corrective action completed.'}`;
+
+    db.prepare(`
+      INSERT INTO activity_logs (issue_id, action, actor, notes)
+      VALUES (?, ?, ?, ?)
+    `).run(issueId, `Status: ${status.toUpperCase()}`, actor, notes);
+
+    // Notify citizen
+    db.prepare(`
+      INSERT INTO notifications (user_phone, role, issue_id, title, message, type)
+      VALUES (?, 'citizen', ?, ?, ?, ?)
+    `).run(
+      existing.reporter_phone,
+      issueId,
+      `Issue ${existing.tracking_id} Status: ${status.toUpperCase()}`,
+      `Your report "${existing.title}" is now marked as ${status}. ${notes}`,
+      status === 'resolved' ? 'status_change' : 'info'
+    );
+
+    const updated = db.prepare('SELECT * FROM issues WHERE id = ?').get(issueId);
+    res.json({ success: true, message: `Issue status updated to ${status}`, issue: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// 7. ANALYTICS & INSIGHTS (Super Admin Global Overview)
+// -----------------------------------------------------------------------------
+app.get('/api/analytics/overview', (req, res) => {
+  try {
+    const total = db.prepare('SELECT count(*) as count FROM issues').get().count;
+    const pending = db.prepare("SELECT count(*) as count FROM issues WHERE status = 'pending'").get().count;
+    const inProgress = db.prepare("SELECT count(*) as count FROM issues WHERE status IN ('in-progress', 'accepted')").get().count;
+    const resolved = db.prepare("SELECT count(*) as count FROM issues WHERE status = 'resolved'").get().count;
+    const rejected = db.prepare("SELECT count(*) as count FROM issues WHERE status = 'rejected'").get().count;
+
+    const resolutionRate = total > 0 ? `${Math.round((resolved / total) * 100)}%` : '0%';
+
+    // Category distribution for pie chart
+    const categoryRows = db.prepare(`
+      SELECT category, count(*) as count FROM issues GROUP BY category
+    `).all();
+
+    const categoryNames = {
+      garbage: 'Garbage & Waste',
+      pothole: 'Pothole & Roads',
+      streetlight: 'Street Lights',
+      water_leak: 'Water Works',
+      sewage: 'Sewage & Drain',
+      traffic_signal: 'Traffic Signals',
+      tree: 'Trees & Parks'
+    };
+
+    const pieData = categoryRows.map(r => ({
+      name: categoryNames[r.category] || r.category,
+      value: r.count
+    }));
+
+    // Monthly data for bar chart
+    const monthlyData = [
+      { month: 'Jan', issues: 40 },
+      { month: 'Feb', issues: 55 },
+      { month: 'Mar', issues: 30 },
+      { month: 'Apr', issues: 70 },
+      { month: 'May', issues: 65 },
+      { month: 'Jun', issues: total }
+    ];
+
+    // Priority breakdown
+    const priorityBreakdown = db.prepare(`
+      SELECT priority, count(*) as count FROM issues GROUP BY priority
+    `).all();
+
+    res.json({
+      success: true,
+      stats: [
+        { label: 'Total Issues', value: total },
+        { label: 'Pending Issues', value: pending },
+        { label: 'In-Progress', value: inProgress },
+        { label: 'Resolved Issues', value: resolved },
+        { label: 'Resolution Rate', value: resolutionRate }
+      ],
+      pieData,
+      monthlyData,
+      priorityBreakdown
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// 8. DEPARTMENTS CRUD & STATS
+// -----------------------------------------------------------------------------
+app.get('/api/departments', (req, res) => {
+  try {
+    const departments = db.prepare('SELECT * FROM departments WHERE active = 1').all();
+
+    // Attach live issue counts to each department
+    const deptsWithStats = departments.map(d => {
+      const issues = db.prepare(`
+        SELECT 
+          count(*) as total,
+          sum(case when status = 'pending' then 1 else 0 end) as pending,
+          sum(case when status = 'resolved' then 1 else 0 end) as resolved
+        FROM issues WHERE department_id = ?
+      `).get(d.id);
+
+      return {
+        ...d,
+        totalIssues: issues.total || 0,
+        pendingIssues: issues.pending || 0,
+        resolvedIssues: issues.resolved || 0
+      };
+    });
+
+    res.json({ success: true, departments: deptsWithStats });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/departments', (req, res) => {
+  try {
+    const { name, category_key, head, phone, email, zone, sla_hours = 24 } = req.body;
+    const stmt = db.prepare(`
+      INSERT INTO departments (name, category_key, head, phone, email, zone, sla_hours)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    const result = stmt.run(name, category_key || 'general', head, phone, email, zone, sla_hours);
+    res.status(201).json({ success: true, id: Number(result.lastInsertRowid), message: 'Department created successfully' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// 9. ADMINS / STAFF MANAGEMENT
+// -----------------------------------------------------------------------------
+app.get('/api/admin/admins', (req, res) => {
+  try {
+    const admins = db.prepare(`
+      SELECT u.id, u.name, u.email, u.phone, u.role, d.name as department, d.id as department_id
+      FROM users u
+      LEFT JOIN departments d ON u.department_id = d.id
+      WHERE u.role IN ('dept_admin', 'superadmin')
+    `).all();
+    res.json({ success: true, admins });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/admin/create-admin', (req, res) => {
+  try {
+    const { name, email, phone, password = 'password123', department_id, department } = req.body;
+
+    let deptId = department_id;
+    if (!deptId && department) {
+      const foundDept = db.prepare('SELECT id FROM departments WHERE name LIKE ?').get(`%${department}%`);
+      if (foundDept) deptId = foundDept.id;
+    }
+
+    const stmt = db.prepare(`
+      INSERT INTO users (name, email, phone, role, department_id, password)
+      VALUES (?, ?, ?, 'dept_admin', ?, ?)
+    `);
+    const info = stmt.run(name, email, phone, deptId || 1, password);
+
+    res.status(201).json({
+      success: true,
+      message: 'Department admin created successfully',
+      admin: { id: Number(info.lastInsertRowid), name, email, phone, department_id: deptId }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// OTP AUTH (email: send, verify, first-time profile)
+// -----------------------------------------------------------------------------
+const OTP_TTL_MS = 5 * 60 * 1000;
+const RESEND_MS = 30 * 1000;
+const MAX_ATTEMPTS = 5;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const profileTokens = new Map(); // short-lived token for first-time name entry
+
+const normEmail = (v) => String(v || '').trim().toLowerCase();
+
+const hashOtp = (email, otp) =>
+  crypto.createHash('sha256')
+    .update(`${email}:${otp}:${process.env.OTP_SECRET || 'dev-secret'}`)
+    .digest('hex');
+
+app.post('/api/auth/send-otp', async (req, res) => {
+  try {
+    const email = normEmail(req.body.email);
+    if (!EMAIL_RE.test(email) || email.length > 254) {
+      return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
+    }
+
+    const last = db.prepare('SELECT created_at_ms FROM email_otps WHERE identifier = ? ORDER BY id DESC LIMIT 1').get(email);
+    if (last && Date.now() - last.created_at_ms < RESEND_MS) {
+      return res.status(429).json({ success: false, message: 'Please wait 30 seconds before requesting another code.' });
+    }
+
+    const otp = String(crypto.randomInt(100000, 1000000));
+    db.prepare('DELETE FROM email_otps WHERE identifier = ?').run(email);
+    db.prepare('INSERT INTO email_otps (identifier, otp_hash, expires_at_ms, created_at_ms) VALUES (?, ?, ?, ?)')
+      .run(email, hashOtp(email, otp), Date.now() + OTP_TTL_MS, Date.now());
+
+    try {
+      await sendOtpEmail(email, otp);
+    } catch (mailErr) {
+      db.prepare('DELETE FROM email_otps WHERE identifier = ?').run(email);
+      console.error('Email send failed:', mailErr.message);
+      return res.status(502).json({ success: false, message: 'Could not send the email. Try again.' });
+    }
+
+    const devMode = !process.env.GMAIL_USER;
+    res.json({ success: true, message: 'Code sent', ...(devMode && { devOtp: otp }) });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/auth/verify-otp', (req, res) => {
+  try {
+    const email = normEmail(req.body.email);
+    const otp = String(req.body.otp || '').trim();
+
+    const row = db.prepare('SELECT * FROM email_otps WHERE identifier = ? ORDER BY id DESC LIMIT 1').get(email);
+    if (!row || Date.now() > row.expires_at_ms) {
+      return res.status(400).json({ success: false, message: 'Code expired. Please request a new one.' });
+    }
+    if (row.attempts >= MAX_ATTEMPTS) {
+      return res.status(429).json({ success: false, message: 'Too many wrong attempts. Request a new code.' });
+    }
+    if (hashOtp(email, otp) !== row.otp_hash) {
+      db.prepare('UPDATE email_otps SET attempts = attempts + 1 WHERE id = ?').run(row.id);
+      return res.status(401).json({ success: false, message: 'Incorrect code.' });
+    }
+
+    db.prepare('DELETE FROM email_otps WHERE identifier = ?').run(email);
+
+    const user = db.prepare("SELECT id, name, email, role FROM users WHERE email = ? AND role = 'citizen'").get(email);
+    if (user) return res.json({ success: true, needsName: false, user });
+
+    const token = crypto.randomBytes(16).toString('hex');
+    profileTokens.set(token, { email, exp: Date.now() + 10 * 60 * 1000 });
+    res.json({ success: true, needsName: true, profileToken: token });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/auth/complete-profile', (req, res) => {
+  try {
+    const { profileToken, name } = req.body;
+    const entry = profileTokens.get(profileToken);
+    if (!entry || Date.now() > entry.exp || !String(name || '').trim()) {
+      return res.status(400).json({ success: false, message: 'Session expired. Please log in again.' });
+    }
+    profileTokens.delete(profileToken);
+    const clean = String(name).trim();
+    const info = db.prepare("INSERT INTO users (name, email, role) VALUES (?, ?, 'citizen')").run(clean, entry.email);
+    res.json({ success: true, user: { id: Number(info.lastInsertRowid), name: clean, email: entry.email, role: 'citizen' } });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// 10. AUTHENTICATION & LOGIN
+// -----------------------------------------------------------------------------
+app.post('/api/auth/login', (req, res) => {
+  try {
+    const { email, username, phone, password, role } = req.body;
+
+    if (role === 'superadmin' || email === 'admin@eco.com') {
+      const user = db.prepare("SELECT * FROM users WHERE role = 'superadmin'").get();
+      if (password === '123456' || (user && user.password === password)) {
+        return res.json({ success: true, user: { name: 'Super Admin', email: 'admin@eco.com', role: 'superadmin' } });
+      }
+      return res.status(401).json({ success: false, message: 'Invalid Super Admin credentials' });
+    }
+
+    if (role === 'dept_admin' || email === 'dept@eco.com' || username === 'dept@eco.com') {
+      const user = db.prepare("SELECT u.*, d.name as department_name FROM users u LEFT JOIN departments d ON u.department_id = d.id WHERE u.email = ? OR u.role = 'dept_admin'").get(email || username || 'dept@eco.com');
+      if (password === '123456' || (user && user.password === password)) {
+        return res.json({
+          success: true,
+          user: {
+            id: user ? user.id : 2,
+            name: user ? user.name : 'Sanitation Dept Admin',
+            email: email || 'dept@eco.com',
+            role: 'dept_admin',
+            department_id: user ? user.department_id : 1,
+            department_name: user ? user.department_name : 'Health & Sanitation Department'
+          }
+        });
+      }
+      return res.status(401).json({ success: false, message: 'Invalid Department Admin credentials' });
+    }
+
+    // Citizens must log in through the OTP endpoints above
+    return res.status(400).json({ success: false, message: 'Citizens must log in with an email code.' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// -----------------------------------------------------------------------------
+// 11. NOTIFICATIONS
+// -----------------------------------------------------------------------------
+app.get('/api/notifications', (req, res) => {
+  try {
+    const { phone, role = 'citizen' } = req.query;
+    let query = 'SELECT * FROM notifications WHERE 1=1';
+    const params = [];
+
+    if (phone) {
+      query += ' AND user_phone = ?';
+      params.push(phone);
+    } else if (role) {
+      query += ' AND role = ?';
+      params.push(role);
+    }
+
+    query += ' ORDER BY id DESC LIMIT 20';
+    const notifications = db.prepare(query).all(...params);
+    res.json({ success: true, notifications });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.patch('/api/notifications/:id/read', (req, res) => {
+  try {
+    db.prepare('UPDATE notifications SET is_read = 1 WHERE id = ?').run(Number(req.params.id));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Start Server
+app.listen(PORT, () => {
+  console.log(`[Eco-Saathi Server] Running on http://localhost:${PORT}`);
+});
