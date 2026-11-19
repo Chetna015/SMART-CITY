@@ -6,6 +6,8 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { db, initDatabase } from './db.js';
 import { analyzeCivicReport } from './ai_engine.js';
+import crypto from 'node:crypto';
+import { sendOtpSms } from './sms.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -504,6 +506,98 @@ app.post('/api/admin/create-admin', (req, res) => {
       message: 'Department admin created successfully',
       admin: { id: Number(info.lastInsertRowid), name, email, phone, department_id: deptId }
     });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 
+// -----------------------------------------------------------------------------
+// OTP AUTH
+// -----------------------------------------------------------------------------
+const OTP_TTL_MS = 5 * 60 * 1000;
+const RESEND_MS = 30 * 1000;
+const MAX_ATTEMPTS = 5;
+const profileTokens = new Map(); // short-lived token for first-time name entry
+
+const hashOtp = (phone, otp) =>
+  crypto.createHash('sha256')
+    .update(`${phone}:${otp}:${process.env.OTP_SECRET || 'dev-secret'}`)
+    .digest('hex');
+
+app.post('/api/auth/send-otp', async (req, res) => {
+  try {
+    const phone = String(req.body.phone || '').replace(/\D/g, '');
+    if (!/^[6-9]\d{9}$/.test(phone)) {
+      return res.status(400).json({ success: false, message: 'Enter a valid 10-digit mobile number.' });
+    }
+
+    const last = db.prepare('SELECT created_at_ms FROM otps WHERE phone = ? ORDER BY id DESC LIMIT 1').get(phone);
+    if (last && Date.now() - last.created_at_ms < RESEND_MS) {
+      return res.status(429).json({ success: false, message: 'Please wait 30 seconds before requesting another OTP.' });
+    }
+
+    const otp = String(crypto.randomInt(100000, 1000000));
+    db.prepare('DELETE FROM otps WHERE phone = ?').run(phone);
+    db.prepare('INSERT INTO otps (phone, otp_hash, expires_at_ms, created_at_ms) VALUES (?, ?, ?, ?)')
+      .run(phone, hashOtp(phone, otp), Date.now() + OTP_TTL_MS, Date.now());
+
+    try {
+      await sendOtpSms(phone, otp);
+    } catch (smsErr) {
+      db.prepare('DELETE FROM otps WHERE phone = ?').run(phone);
+      console.error('SMS send failed:', smsErr.message);
+      return res.status(502).json({ success: false, message: 'Could not send SMS. Try again.' });
+    }
+
+    const devMode = !process.env.SMS_PROVIDER;
+    res.json({ success: true, message: 'OTP sent', ...(devMode && { devOtp: otp }) });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/auth/verify-otp', (req, res) => {
+  try {
+    const phone = String(req.body.phone || '').replace(/\D/g, '');
+    const otp = String(req.body.otp || '').trim();
+
+    const row = db.prepare('SELECT * FROM otps WHERE phone = ? ORDER BY id DESC LIMIT 1').get(phone);
+    if (!row || Date.now() > row.expires_at_ms) {
+      return res.status(400).json({ success: false, message: 'OTP expired. Please request a new one.' });
+    }
+    if (row.attempts >= MAX_ATTEMPTS) {
+      return res.status(429).json({ success: false, message: 'Too many wrong attempts. Request a new OTP.' });
+    }
+    if (hashOtp(phone, otp) !== row.otp_hash) {
+      db.prepare('UPDATE otps SET attempts = attempts + 1 WHERE id = ?').run(row.id);
+      return res.status(401).json({ success: false, message: 'Incorrect OTP.' });
+    }
+
+    db.prepare('DELETE FROM otps WHERE phone = ?').run(phone);
+
+    const user = db.prepare("SELECT id, name, phone, role FROM users WHERE phone = ? AND role = 'citizen'").get(phone);
+    if (user) return res.json({ success: true, needsName: false, user });
+
+    const token = crypto.randomBytes(16).toString('hex');
+    profileTokens.set(token, { phone, exp: Date.now() + 10 * 60 * 1000 });
+    res.json({ success: true, needsName: true, profileToken: token });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/auth/complete-profile', (req, res) => {
+  try {
+    const { profileToken, name } = req.body;
+    const entry = profileTokens.get(profileToken);
+    if (!entry || Date.now() > entry.exp || !String(name || '').trim()) {
+      return res.status(400).json({ success: false, message: 'Session expired. Please log in again.' });
+    }
+    profileTokens.delete(profileToken);
+    const clean = String(name).trim();
+    const info = db.prepare("INSERT INTO users (name, phone, role) VALUES (?, ?, 'citizen')").run(clean, entry.phone);
+    res.json({ success: true, user: { id: Number(info.lastInsertRowid), name: clean, phone: entry.phone, role: 'citizen' } });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
