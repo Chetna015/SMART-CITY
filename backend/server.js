@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { db, initDatabase } from './db.js';
 import { analyzeCivicReport } from './ai_engine.js';
 import crypto from 'node:crypto';
-import { sendOtpSms } from './sms.js';
+import { sendOtpEmail } from './mailer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -512,45 +512,48 @@ app.post('/api/admin/create-admin', (req, res) => {
 });
 
 // -----------------------------------------------------------------------------
-// OTP AUTH (send, verify, first-time profile)
+// OTP AUTH (email: send, verify, first-time profile)
 // -----------------------------------------------------------------------------
 const OTP_TTL_MS = 5 * 60 * 1000;
 const RESEND_MS = 30 * 1000;
 const MAX_ATTEMPTS = 5;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const profileTokens = new Map(); // short-lived token for first-time name entry
 
-const hashOtp = (phone, otp) =>
+const normEmail = (v) => String(v || '').trim().toLowerCase();
+
+const hashOtp = (email, otp) =>
   crypto.createHash('sha256')
-    .update(`${phone}:${otp}:${process.env.OTP_SECRET || 'dev-secret'}`)
+    .update(`${email}:${otp}:${process.env.OTP_SECRET || 'dev-secret'}`)
     .digest('hex');
 
 app.post('/api/auth/send-otp', async (req, res) => {
   try {
-    const phone = String(req.body.phone || '').replace(/\D/g, '');
-    if (!/^[6-9]\d{9}$/.test(phone)) {
-      return res.status(400).json({ success: false, message: 'Enter a valid 10-digit mobile number.' });
+    const email = normEmail(req.body.email);
+    if (!EMAIL_RE.test(email) || email.length > 254) {
+      return res.status(400).json({ success: false, message: 'Enter a valid email address.' });
     }
 
-    const last = db.prepare('SELECT created_at_ms FROM otps WHERE phone = ? ORDER BY id DESC LIMIT 1').get(phone);
+    const last = db.prepare('SELECT created_at_ms FROM email_otps WHERE identifier = ? ORDER BY id DESC LIMIT 1').get(email);
     if (last && Date.now() - last.created_at_ms < RESEND_MS) {
-      return res.status(429).json({ success: false, message: 'Please wait 30 seconds before requesting another OTP.' });
+      return res.status(429).json({ success: false, message: 'Please wait 30 seconds before requesting another code.' });
     }
 
     const otp = String(crypto.randomInt(100000, 1000000));
-    db.prepare('DELETE FROM otps WHERE phone = ?').run(phone);
-    db.prepare('INSERT INTO otps (phone, otp_hash, expires_at_ms, created_at_ms) VALUES (?, ?, ?, ?)')
-      .run(phone, hashOtp(phone, otp), Date.now() + OTP_TTL_MS, Date.now());
+    db.prepare('DELETE FROM email_otps WHERE identifier = ?').run(email);
+    db.prepare('INSERT INTO email_otps (identifier, otp_hash, expires_at_ms, created_at_ms) VALUES (?, ?, ?, ?)')
+      .run(email, hashOtp(email, otp), Date.now() + OTP_TTL_MS, Date.now());
 
     try {
-      await sendOtpSms(phone, otp);
-    } catch (smsErr) {
-      db.prepare('DELETE FROM otps WHERE phone = ?').run(phone);
-      console.error('SMS send failed:', smsErr.message);
-      return res.status(502).json({ success: false, message: 'Could not send SMS. Try again.' });
+      await sendOtpEmail(email, otp);
+    } catch (mailErr) {
+      db.prepare('DELETE FROM email_otps WHERE identifier = ?').run(email);
+      console.error('Email send failed:', mailErr.message);
+      return res.status(502).json({ success: false, message: 'Could not send the email. Try again.' });
     }
 
-    const devMode = !process.env.SMS_PROVIDER;
-    res.json({ success: true, message: 'OTP sent', ...(devMode && { devOtp: otp }) });
+    const devMode = !process.env.GMAIL_USER;
+    res.json({ success: true, message: 'Code sent', ...(devMode && { devOtp: otp }) });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -558,28 +561,28 @@ app.post('/api/auth/send-otp', async (req, res) => {
 
 app.post('/api/auth/verify-otp', (req, res) => {
   try {
-    const phone = String(req.body.phone || '').replace(/\D/g, '');
+    const email = normEmail(req.body.email);
     const otp = String(req.body.otp || '').trim();
 
-    const row = db.prepare('SELECT * FROM otps WHERE phone = ? ORDER BY id DESC LIMIT 1').get(phone);
+    const row = db.prepare('SELECT * FROM email_otps WHERE identifier = ? ORDER BY id DESC LIMIT 1').get(email);
     if (!row || Date.now() > row.expires_at_ms) {
-      return res.status(400).json({ success: false, message: 'OTP expired. Please request a new one.' });
+      return res.status(400).json({ success: false, message: 'Code expired. Please request a new one.' });
     }
     if (row.attempts >= MAX_ATTEMPTS) {
-      return res.status(429).json({ success: false, message: 'Too many wrong attempts. Request a new OTP.' });
+      return res.status(429).json({ success: false, message: 'Too many wrong attempts. Request a new code.' });
     }
-    if (hashOtp(phone, otp) !== row.otp_hash) {
-      db.prepare('UPDATE otps SET attempts = attempts + 1 WHERE id = ?').run(row.id);
-      return res.status(401).json({ success: false, message: 'Incorrect OTP.' });
+    if (hashOtp(email, otp) !== row.otp_hash) {
+      db.prepare('UPDATE email_otps SET attempts = attempts + 1 WHERE id = ?').run(row.id);
+      return res.status(401).json({ success: false, message: 'Incorrect code.' });
     }
 
-    db.prepare('DELETE FROM otps WHERE phone = ?').run(phone);
+    db.prepare('DELETE FROM email_otps WHERE identifier = ?').run(email);
 
-    const user = db.prepare("SELECT id, name, phone, role FROM users WHERE phone = ? AND role = 'citizen'").get(phone);
+    const user = db.prepare("SELECT id, name, email, role FROM users WHERE email = ? AND role = 'citizen'").get(email);
     if (user) return res.json({ success: true, needsName: false, user });
 
     const token = crypto.randomBytes(16).toString('hex');
-    profileTokens.set(token, { phone, exp: Date.now() + 10 * 60 * 1000 });
+    profileTokens.set(token, { email, exp: Date.now() + 10 * 60 * 1000 });
     res.json({ success: true, needsName: true, profileToken: token });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -595,8 +598,8 @@ app.post('/api/auth/complete-profile', (req, res) => {
     }
     profileTokens.delete(profileToken);
     const clean = String(name).trim();
-    const info = db.prepare("INSERT INTO users (name, phone, role) VALUES (?, ?, 'citizen')").run(clean, entry.phone);
-    res.json({ success: true, user: { id: Number(info.lastInsertRowid), name: clean, phone: entry.phone, role: 'citizen' } });
+    const info = db.prepare("INSERT INTO users (name, email, role) VALUES (?, ?, 'citizen')").run(clean, entry.email);
+    res.json({ success: true, user: { id: Number(info.lastInsertRowid), name: clean, email: entry.email, role: 'citizen' } });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -636,7 +639,7 @@ app.post('/api/auth/login', (req, res) => {
     }
 
     // Citizens must log in through the OTP endpoints above
-    return res.status(400).json({ success: false, message: 'Citizens must log in with OTP.' });
+    return res.status(400).json({ success: false, message: 'Citizens must log in with an email code.' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
