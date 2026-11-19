@@ -511,9 +511,8 @@ app.post('/api/admin/create-admin', (req, res) => {
   }
 });
 
-// 
 // -----------------------------------------------------------------------------
-// OTP AUTH
+// OTP AUTH (send, verify, first-time profile)
 // -----------------------------------------------------------------------------
 const OTP_TTL_MS = 5 * 60 * 1000;
 const RESEND_MS = 30 * 1000;
@@ -636,17 +635,8 @@ app.post('/api/auth/login', (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid Department Admin credentials' });
     }
 
-    // Citizen login (via mobile/OTP or phone)
-    if (phone) {
-      let citizen = db.prepare('SELECT * FROM users WHERE phone = ?').get(phone);
-      if (!citizen) {
-        const info = db.prepare('INSERT INTO users (name, phone, role) VALUES (?, ?, \'citizen\')').run(username || 'Citizen', phone);
-        citizen = { id: Number(info.lastInsertRowid), name: username || 'Citizen', phone, role: 'citizen' };
-      }
-      return res.json({ success: true, user: citizen });
-    }
-
-    res.json({ success: true, user: { name: username || 'Citizen', role: 'citizen' } });
+    // Citizens must log in through the OTP endpoints above
+    return res.status(400).json({ success: false, message: 'Citizens must log in with OTP.' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
